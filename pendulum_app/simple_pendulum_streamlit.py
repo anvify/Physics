@@ -1,55 +1,48 @@
-import dash
-from dash import html, dcc, Input, Output
-import plotly.graph_objs as go
+import streamlit as st
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
-# Pendulum physics function
-def calculate_pendulum(length, mass, angle_deg, time_span=10, dt=0.05):
-    g = 9.81
-    angle_rad = np.radians(angle_deg)
-    t = np.arange(0, time_span, dt)
-    theta = angle_rad * np.cos(np.sqrt(g / length) * t)
-    x = length * np.sin(theta)
-    y = -length * np.cos(theta)
-    return t, x, y, theta
+# Streamlit UI
+st.title("Simple Pendulum Simulation 🌗")
 
-# Create Dash app
-app = dash.Dash(__name__)
-server = app.server
+length = st.slider("Pendulum Length (m)", 0.1, 5.0, 1.0, 0.1)
+mass = st.slider("Mass (kg)", 0.1, 10.0, 1.0, 0.1)
+theta0_deg = st.slider("Initial Angle (degrees)", -90, 90, 30)
+g = st.slider("Gravity (m/s²)", 1.0, 20.0, 9.8, 0.1)
 
-app.layout = html.Div([
-    html.H1("Interactive Pendulum Simulation"),
-    html.Div([
-        html.Label('Pendulum Length (m):'),
-        dcc.Slider(id='length-slider', min=0.1, max=5, step=0.1, value=1,
-                   marks={i: f'{i}' for i in range(1, 6)}),
-        html.Label('Pendulum Mass (kg):'),
-        dcc.Slider(id='mass-slider', min=0.1, max=10, step=0.1, value=1,
-                   marks={i: f'{i}' for i in range(1, 11)}),
-        html.Label('Initial Angle (degrees):'),
-        dcc.Slider(id='angle-slider', min=1, max=90, step=1, value=30,
-                   marks={i: f'{i}°' for i in range(0, 91, 15)}),
-    ], style={'width': '50%', 'padding': '20px'}),
-    dcc.Graph(id='pendulum-graph')
-])
+theta0 = np.radians(theta0_deg)
 
-@app.callback(
-    Output('pendulum-graph', 'figure'),
-    Input('length-slider', 'value'),
-    Input('mass-slider', 'value'),
-    Input('angle-slider', 'value')
-)
-def update_graph(length, mass, angle_deg):
-    t, x, y, theta = calculate_pendulum(length, mass, angle_deg)
-    trace = go.Scatter(x=x, y=y, mode='lines+markers', line=dict(color='blue'), name='Pendulum Path')
-    layout = go.Layout(
-        title='Pendulum Motion',
-        xaxis=dict(title='X Position (m)', scaleanchor='y', scaleratio=1),
-        yaxis=dict(title='Y Position (m)'),
-        showlegend=False,
-        height=600
-    )
-    return go.Figure(data=[trace], layout=layout)
+# Solve pendulum equation using small angle approximation
+t = np.linspace(0, 10, 1000)
+omega = np.sqrt(g / length)
+theta = theta0 * np.cos(omega * t)
 
-app.run_server(debug=False)
+x = length * np.sin(theta)
+y = -length * np.cos(theta)
 
+# Plot the pendulum motion
+fig, ax = plt.subplots()
+ax.set_aspect('equal')
+ax.set_xlim(-length - 0.2, length + 0.2)
+ax.set_ylim(-length - 0.2, 0.2)
+ax.set_title("Pendulum Motion")
+ax.set_xlabel("x (m)")
+ax.set_ylabel("y (m)")
+
+line, = ax.plot([], [], 'o-', lw=2, color='darkblue')
+trail, = ax.plot([], [], 'r--', lw=0.5)
+
+def init():
+    line.set_data([], [])
+    trail.set_data([], [])
+    return line, trail
+
+def update(frame):
+    line.set_data([0, x[frame]], [0, y[frame]])
+    trail.set_data(x[:frame], y[:frame])
+    return line, trail
+
+ani = FuncAnimation(fig, update, frames=len(t), init_func=init, blit=True)
+
+st.pyplot(fig)
